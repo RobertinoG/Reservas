@@ -4,7 +4,7 @@ from googleapiclient.discovery import build
 import pandas as pd
 
 # Configura tu archivo de credenciales de servicio
-SERVICE_ACCOUNT_FILE = 'credencial.json'  # Reemplaza con la ruta a tu archivo JSON
+SERVICE_ACCOUNT_FILE = 'credentials.json'  # Reemplaza con la ruta a tu archivo JSON
 SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/spreadsheets']
 
 def authenticate_google_service():
