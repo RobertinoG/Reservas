@@ -1,50 +1,26 @@
 import streamlit as st
-import datetime
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import os
+import pandas as pd
 
-# Scopes para Google Calendar y Google Sheets
+# Configura tu archivo de credenciales de servicio
+SERVICE_ACCOUNT_FILE = 'ruta/a/tu/credencial.json'  # Reemplaza con la ruta a tu archivo JSON
 SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/spreadsheets']
 
-def authenticate_google():
-    """Autenticación con Google y manejo de tokens"""
-    creds = None
-    # Verificar si ya tenemos credenciales guardadas (token.json)
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    # Si no hay credenciales válidas, solicitar al usuario
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Guardar las credenciales en token.json para futuras ejecuciones
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-    return creds
+def authenticate_google_service():
+    """Autenticar y crear el servicio de Google Calendar usando credenciales de servicio."""
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE,
+        scopes=SCOPES
+    )
+    return build('calendar', 'v3', credentials=creds), build('sheets', 'v4', credentials=creds)
 
-def get_calendar_events():
-    """Obtener próximos eventos de Google Calendar"""
-    creds = authenticate_google()
-    service = build('calendar', 'v3', credentials=creds)
-    now = datetime.datetime.utcnow().isoformat() + 'Z'  # Fecha y hora actual en formato ISO
-    events_result = service.events().list(calendarId='primary', timeMin=now,
-                                          maxResults=10, singleEvents=True,
-                                          orderBy='startTime').execute()
-    events = events_result.get('items', [])
-    return events
-
-def create_calendar_event(start_time_str, end_time_str, summary, description=''):
-    """Crear un evento en Google Calendar"""
-    creds = authenticate_google()
-    service = build('calendar', 'v3', credentials=creds)
+def create_calendar_event(start_time_str, end_time_str, event_title, event_description):
+    """Crear un evento en Google Calendar."""
+    service, _ = authenticate_google_service()
     event = {
-        'summary': summary,
-        'description': description,
+        'summary': event_title,
+        'description': event_description,
         'start': {
             'dateTime': start_time_str,
             'timeZone': 'America/Argentina/Buenos_Aires',
@@ -57,42 +33,40 @@ def create_calendar_event(start_time_str, end_time_str, summary, description='')
     event = service.events().insert(calendarId='primary', body=event).execute()
     return event
 
-# Interfaz en Streamlit
-st.title("Aplicación de Reservas")
+def add_reservation_to_sheet(name, date, time, duration, description, link):
+    """Agregar reserva a Google Sheets."""
+    _, service = authenticate_google_service()
+    sheet_id = 'TU_SHEET_ID'  # Reemplaza con el ID de tu hoja de cálculo
+    range_name = 'Reservas!A1'  # Cambia el rango según tu hoja
 
-st.write("Aquí puedes consultar la disponibilidad o realizar una reserva.")
-
-# Sección para mostrar eventos del calendario
-st.header("Ver próximas reservas")
-
-if st.button('Mostrar próximas 10 reservas'):
-    events = get_calendar_events()
-    if not events:
-        st.write("No hay eventos próximos.")
-    else:
-        for event in events:
-            start = event['start'].get('dateTime', event['start'].get('date'))
-            st.write(f"{event['summary']} - {start}")
-
-# Sección para crear una reserva nueva
-st.header("Reservar una cita")
-
-with st.form("form_reserva"):
-    event_title = st.text_input('Título de la reserva', '')
-    event_description = st.text_area('Descripción', '')
-    event_date = st.date_input("Fecha de la reserva", datetime.date.today())
-    event_time = st.time_input('Hora de la reserva', datetime.datetime.now().time())
-    event_duration = st.number_input('Duración de la reserva (en horas)', min_value=1, max_value=12, step=1)
+    values = [[name, date, time, duration, description, link]]
+    body = {
+        'values': values
+    }
     
-    submitted = st.form_submit_button("Reservar")
+    service.spreadsheets().values().append(
+        spreadsheetId=sheet_id,
+        range=range_name,
+        valueInputOption='RAW',
+        body=body
+    ).execute()
+
+# Interfaz de usuario de Streamlit
+st.title("Sistema de Reservas")
+event_title = st.text_input("Título del evento:")
+event_description = st.text_area("Descripción del evento:")
+event_date = st.date_input("Fecha de la reserva:")
+event_time = st.time_input("Hora de inicio:")
+event_duration = st.number_input("Duración (en minutos):", min_value=1)
+
+if st.button("Crear Reserva"):
+    start_time_str = f"{event_date}T{event_time.hour}:{event_time.minute}:00"
+    end_time_str = f"{event_date}T{event_time.hour}:{event_time.minute + event_duration}:00"
     
-    if submitted and event_title:
-        start_datetime = datetime.datetime.combine(event_date, event_time)
-        end_datetime = start_datetime + datetime.timedelta(hours=event_duration)
-        start_time_str = start_datetime.isoformat()
-        end_time_str = end_datetime.isoformat()
+    # Crear el evento en Google Calendar
+    event = create_calendar_event(start_time_str, end_time_str, event_title, event_description)
+    
+    # Agregar la reserva a Google Sheets
+    add_reservation_to_sheet('Nombre del usuario', str(event_date), str(event_time), event_duration, event_description, event.get('htmlLink'))
 
-        event = create_calendar_event(start_time_str, end_time_str, event_title, event_description)
-        st.write(f"Reserva creada: {event.get('htmlLink')}")
-
-st.write("Fin de la aplicación de reservas")
+    st.success("Reserva creada exitosamente!")
