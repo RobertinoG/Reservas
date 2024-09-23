@@ -4,7 +4,7 @@ from googleapiclient.discovery import build
 import pandas as pd
 
 # Configura tu archivo de credenciales de servicio
-SERVICE_ACCOUNT_FILE = 'ruta/a/tu/credencial.json'  # Reemplaza con la ruta a tu archivo JSON
+SERVICE_ACCOUNT_FILE = 'credencial.json'  # Reemplaza con la ruta a tu archivo JSON
 SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/spreadsheets']
 
 def authenticate_google_service():
@@ -36,7 +36,7 @@ def create_calendar_event(start_time_str, end_time_str, event_title, event_descr
 def add_reservation_to_sheet(name, date, time, duration, description, link):
     """Agregar reserva a Google Sheets."""
     _, service = authenticate_google_service()
-    sheet_id = 'TU_SHEET_ID'  # Reemplaza con el ID de tu hoja de cálculo
+    sheet_id = 'https://docs.google.com/spreadsheets/d/1qX8m577-1s10oOKgEK3hT9-ltUb9MHWxQPoGRNqK81s/edit?gid=0#gid=0'  # Reemplaza con el ID de tu hoja de cálculo
     range_name = 'Reservas!A1'  # Cambia el rango según tu hoja
 
     values = [[name, date, time, duration, description, link]]
